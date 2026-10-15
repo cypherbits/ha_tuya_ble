@@ -39,6 +39,30 @@ retrieval fails, the existing manual setup form is prefilled with the OpenAPI
 device data so the key pair can be completed from another trusted source.
 Classic devices that genuinely do not use `secKey` can leave it empty.
 
+### Troubleshooting
+
+* **Cloud denied the request (subscription or API permission package)** — the
+  Tuya IoT project has no active subscription for the service used to read
+  device credentials.
+  In the Tuya IoT Platform open the project, go to *Cloud → Cloud Services* and
+  subscribe to, or renew, the **Cloud Development** plan / **IoT Core** service.
+  Authorization alone is not enough once the plan has expired; the trial of the
+  free plan has to be re-applied for.
+* **The linked account returned no devices** — the app account that owns the
+  devices is not linked to the IoT project, or it belongs to a different data
+  center. Link it under *Devices → Link Tuya App Account*, using an account
+  created in the same region the project was created in.
+* **No device exposes a Bluetooth address** — the cloud lists the device
+  without a MAC, so it can never be matched. This usually means the device is a
+  Zigbee/Wi-Fi device reached through a Tuya gateway, or that its BLE identity
+  is not published by the OpenAPI, and it cannot be used locally.
+
+If none of the above applies, the device is in the cloud but its Bluetooth
+address differs from the one the cloud reports. Enable debug logging for
+`custom_components.tuya_ble.cloud` and check the addresses the cache was built
+with. Note also that `factory-infos` is the endpoint requiring IoT Core, so a
+project can list devices correctly and still fail here.
+
 ## Supported devices list
 
 See a device marked Experimental you have? We could use real world testing feedback (send in a pull request with testing notes, or open an issue for gaps)

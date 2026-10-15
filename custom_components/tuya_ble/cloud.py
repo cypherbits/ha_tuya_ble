@@ -53,7 +53,11 @@ from .const import (
     TUYA_API_DEVICES_URL,
     TUYA_API_FACTORY_INFO_URL,
     TUYA_API_DEVICE_SPECIFICATION,
+    TUYA_API_PERMISSION_DENIED_CODE,
+    TUYA_API_SUBSCRIPTION_EXPIRED_CODE,
     TUYA_FACTORY_INFO_MAC,
+    TUYA_RESPONSE_CODE,
+    TUYA_RESPONSE_MSG,
     TUYA_RESPONSE_RESULT,
     TUYA_RESPONSE_SUCCESS,
 )
@@ -96,6 +100,31 @@ CONF_TUYA_DEVICE_KEYS = [
 _cache: dict[str, TuyaCloudCacheItem] = {}
 
 
+# Reasons a credential lookup can fail, exposed as `last_cloud_error` so the
+# config flow can tell the user what actually went wrong instead of the generic
+# "device not registered" message.
+CLOUD_ERROR_PERMISSION_DENIED = "permission_denied"
+CLOUD_ERROR_NO_DEVICES = "no_devices"
+CLOUD_ERROR_NO_FACTORY_MAC = "no_factory_mac"
+CLOUD_ERROR_SYNC_FAILED = "sync_failed"
+
+
+def _normalize_address(address: str) -> str:
+    """Return the uppercase, colon-separated key used by the credential cache.
+
+    The factory-info endpoint returns the MAC either colon-separated or as a
+    bare hex string, while the Bluetooth stack can hand back a lower-case
+    address. Both sides of the lookup are normalized here, otherwise a device
+    that is registered in the cloud can never be matched to the device seen
+    over Bluetooth and setup fails with "Device is not registered in Tuya
+    cloud".
+    """
+    clean = address.replace("-", ":").replace(".", ":").strip().upper()
+    if ":" in clean:
+        return clean
+    return ":".join(clean[i : i + 2] for i in range(0, 12, 2))
+
+
 class TuyaMobileIdentityMismatch(TuyaMobileApiError):
     """Mobile credentials do not belong to the OpenAPI device."""
 
@@ -107,6 +136,9 @@ class HASSTuyaBLEDeviceManager(AbstaractTuyaBLEDeviceManager):
         assert hass is not None
         self._hass = hass
         self._data = data
+        # Populated by the credential cache builder; `None` means the last
+        # lookup itself worked and simply had no entry for the given address.
+        self.last_cloud_error: str | None = None
 
     @staticmethod
     def _is_login_success(response: dict[Any, Any]) -> bool:
@@ -177,90 +209,129 @@ class HASSTuyaBLEDeviceManager(AbstaractTuyaBLEDeviceManager):
     async def login(self, add_to_cache: bool = False) -> dict[Any, Any]:
         return await self._login(self._data, add_to_cache)
 
+    def _record_cloud_failure(self, what: str, response: dict[Any, Any]) -> None:
+        """Keep why a cloud lookup failed so it can be reported to the user.
+
+        Without this the caller only ever sees an empty credential set and
+        shows "Device is not registered in Tuya cloud", which is wrong and
+        misleading whenever the failure is actually an API permission or an
+        account problem.
+        """
+        code = response.get(TUYA_RESPONSE_CODE)
+        msg = response.get(TUYA_RESPONSE_MSG)
+        if code in (
+            TUYA_API_PERMISSION_DENIED_CODE,
+            TUYA_API_SUBSCRIPTION_EXPIRED_CODE,
+        ) or (isinstance(msg, str) and "permission" in msg.lower()):
+            self.last_cloud_error = CLOUD_ERROR_PERMISSION_DENIED
+        else:
+            self.last_cloud_error = CLOUD_ERROR_SYNC_FAILED
+        _LOGGER.warning(
+            "Tuya cloud %s request failed (code=%s, msg=%s); device credentials "
+            "cannot be read until it succeeds",
+            what,
+            code,
+            msg,
+        )
+
+    async def _fill_cache_device(
+        self, item: TuyaCloudCacheItem, device: dict[str, Any]
+    ) -> None:
+        """Add one cloud device to the credential cache, keyed by its BLE MAC."""
+        device_id = device.get("id")
+        fi_response = await self._hass.async_add_executor_job(
+            item.api.get,
+            TUYA_API_FACTORY_INFO_URL % (device_id),
+        )
+        if not self._is_login_success(fi_response):
+            self._record_cloud_failure("factory info", fi_response)
+            return
+
+        fi_response_result = fi_response.get(TUYA_RESPONSE_RESULT)
+        factory_info = fi_response_result[0] if fi_response_result else None
+        raw_mac = factory_info.get(TUYA_FACTORY_INFO_MAC) if factory_info else None
+        if not raw_mac:
+            _LOGGER.warning(
+                "Tuya cloud exposes no BLE MAC for device %s (%s), so it cannot "
+                "be matched to the device seen over Bluetooth",
+                device.get("name"),
+                device_id,
+            )
+            return
+
+        mac = _normalize_address(raw_mac)
+        item.credentials[mac] = {
+            CONF_ADDRESS: mac,
+            CONF_UUID: device.get("uuid"),
+            CONF_LOCAL_KEY: device.get("local_key"),
+            CONF_DEVICE_ID: device_id,
+            CONF_CATEGORY: device.get("category"),
+            CONF_PRODUCT_ID: device.get("product_id"),
+            CONF_DEVICE_NAME: device.get("name"),
+            CONF_PRODUCT_MODEL: device.get("model"),
+            CONF_PRODUCT_NAME: device.get("product_name"),
+        }
+        sec_key = device.get("sec_key") or device.get("secKey")
+        if sec_key:
+            item.credentials[mac][CONF_SEC_KEY] = sec_key
+
+        # Some devices (e.g. jtmspro knob locks) report the MAC byte-reversed
+        # in the cloud factory info compared to what they advertise over BLE,
+        # so the credentials can never be matched to the scanned device. Index
+        # the same entry under the reversed address too. Existing keys win, so
+        # a device that genuinely owns that address is never clobbered.
+        reversed_mac = _normalize_address(":".join(reversed(mac.split(":"))))
+        item.credentials.setdefault(reversed_mac, item.credentials[mac])
+
+        await self._fill_cache_specification(item, mac, device_id)
+
+    async def _fill_cache_specification(
+        self, item: TuyaCloudCacheItem, mac: str, device_id: str
+    ) -> None:
+        """Attach the device functions and status range to a cached credential."""
+        spec_response = await self._hass.async_add_executor_job(
+            item.api.get,
+            TUYA_API_DEVICE_SPECIFICATION % device_id,
+        )
+        spec_response_result = spec_response.get(TUYA_RESPONSE_RESULT)
+        if spec_response_result:
+            functions = spec_response_result.get("functions")
+            if functions:
+                item.credentials[mac][CONF_FUNCTIONS] = functions
+            status = spec_response_result.get("status")
+            if status:
+                item.credentials[mac][CONF_STATUS_RANGE] = status
+
     async def _fill_cache_item(self, item: TuyaCloudCacheItem) -> None:
+        self.last_cloud_error = None
         devices_response = await self._hass.async_add_executor_job(
             item.api.get,
             TUYA_API_DEVICES_URL % (item.api.token_info.uid),
         )
-        if devices_response.get(TUYA_RESPONSE_RESULT):
-            devices = devices_response.get(TUYA_RESPONSE_RESULT)
-            if isinstance(devices, Iterable):
-                for device in devices:
-                    fi_response = await self._hass.async_add_executor_job(
-                        item.api.get,
-                        TUYA_API_FACTORY_INFO_URL % (device.get("id")),
-                    )
+        if not self._is_login_success(devices_response):
+            self._record_cloud_failure("device list", devices_response)
+            return
 
-                    fi_response_result = fi_response.get(TUYA_RESPONSE_RESULT)
-                    if fi_response_result and len(fi_response_result) > 0:
-                        factory_info = fi_response_result[0]
-                        if factory_info and (TUYA_FACTORY_INFO_MAC in factory_info):
-                            raw_mac = factory_info[TUYA_FACTORY_INFO_MAC]
-                            if ":" in raw_mac:
-                                # API already returned a colon-separated MAC
-                                mac = raw_mac.upper()
-                            else:
-                                mac = ":".join(
-                                    raw_mac[i : i + 2] for i in range(0, 12, 2)
-                                ).upper()
-                            item.credentials[mac] = {
-                                CONF_ADDRESS: mac,
-                                CONF_UUID: device.get("uuid"),
-                                CONF_LOCAL_KEY: device.get("local_key"),
-                                CONF_DEVICE_ID: device.get("id"),
-                                CONF_CATEGORY: device.get("category"),
-                                CONF_PRODUCT_ID: device.get("product_id"),
-                                CONF_DEVICE_NAME: device.get("name"),
-                                CONF_PRODUCT_MODEL: device.get("model"),
-                                CONF_PRODUCT_NAME: device.get("product_name"),
-                            }
-                            sec_key = device.get("sec_key") or device.get("secKey")
-                            if sec_key:
-                                item.credentials[mac][CONF_SEC_KEY] = sec_key
+        devices = devices_response.get(TUYA_RESPONSE_RESULT)
+        device_count = 0
+        if isinstance(devices, Iterable):
+            for device in devices:
+                device_count += 1
+                await self._fill_cache_device(item, device)
 
-                            # Some devices (e.g. jtmspro knob locks) report the
-                            # MAC byte-reversed in the cloud factory info
-                            # compared to what they advertise over BLE, so the
-                            # credentials can never be matched to the scanned
-                            # device. Index the same entry under the reversed
-                            # address too. Existing keys win, so a device that
-                            # genuinely owns that address is never clobbered.
-                            reversed_mac = ":".join(reversed(mac.split(":")))
-                            item.credentials.setdefault(
-                                reversed_mac, item.credentials[mac]
-                            )
-
-                            spec_response = await self._hass.async_add_executor_job(
-                                item.api.get,
-                                TUYA_API_DEVICE_SPECIFICATION % device.get("id"),
-                            )
-
-                            spec_response_result = spec_response.get(
-                                TUYA_RESPONSE_RESULT
-                            )
-                            if spec_response_result:
-                                functions = spec_response_result.get("functions")
-                                if functions:
-                                    item.credentials[mac][CONF_FUNCTIONS] = functions
-                                status = spec_response_result.get("status")
-                                if status:
-                                    item.credentials[mac][CONF_STATUS_RANGE] = status
-
-                            spec_response = await self._hass.async_add_executor_job(
-                                item.api.get,
-                                TUYA_API_DEVICE_SPECIFICATION % device.get("id"),
-                            )
-
-                            spec_response_result = spec_response.get(
-                                TUYA_RESPONSE_RESULT
-                            )
-                            if spec_response_result:
-                                functions = spec_response_result.get("functions")
-                                if functions:
-                                    item.credentials[mac][CONF_FUNCTIONS] = functions
-                                status = spec_response_result.get("status")
-                                if status:
-                                    item.credentials[mac][CONF_STATUS_RANGE] = status
+        if not item.credentials:
+            if device_count == 0:
+                # Nothing came back at all: the app account that owns the
+                # devices is not linked to this project, or it lives in a
+                # different data center.
+                self.last_cloud_error = CLOUD_ERROR_NO_DEVICES
+                _LOGGER.warning(
+                    "Tuya cloud returned no devices for this account; no BLE "
+                    "address can be resolved"
+                )
+            elif self.last_cloud_error is None:
+                # Devices came back but none exposes a usable BLE MAC.
+                self.last_cloud_error = CLOUD_ERROR_NO_FACTORY_MAC
 
     async def build_cache(self) -> None:
         global _cache
@@ -310,6 +381,7 @@ class HASSTuyaBLEDeviceManager(AbstaractTuyaBLEDeviceManager):
         item: TuyaCloudCacheItem | None = None
         credentials: dict[str, any] | None = None
         result: TuyaBLEDeviceCredentials | None = None
+        normalized_address = _normalize_address(address)
 
         if not force_update and self._has_credentials(self._data):
             credentials = self._data.copy()
@@ -319,7 +391,7 @@ class HASSTuyaBLEDeviceManager(AbstaractTuyaBLEDeviceManager):
                 cache_key = self._get_cache_key(self._data)
             else:
                 for key in _cache.keys():
-                    if _cache[key].credentials.get(address) is not None:
+                    if _cache[key].credentials.get(normalized_address) is not None:
                         cache_key = key
                         break
             if cache_key:
@@ -341,7 +413,7 @@ class HASSTuyaBLEDeviceManager(AbstaractTuyaBLEDeviceManager):
                             await self._fill_cache_item(item)
 
             if item:
-                credentials = item.credentials.get(address)
+                credentials = item.credentials.get(normalized_address)
 
         if credentials:
             sec_key = credentials.get(CONF_SEC_KEY) or self._data.get(CONF_SEC_KEY)

@@ -5,6 +5,9 @@
         },
         "error": {
             "device_not_registered": "设备未在涂鸦云端注册",
+            "cloud_permission_denied": "涂鸦云拒绝了该请求：Cloud Development（IoT Core）订阅缺失或已过期。请在涂鸦 IoT 平台续订后重试。",
+            "cloud_no_devices": "关联的涂鸦账号未返回任何设备。请将拥有这些设备的 App 账号关联到 IoT 项目，并检查其数据中心。",
+            "cloud_no_factory_mac": "涂鸦云返回了设备，但没有任何设备提供蓝牙地址，因此无法匹配。",
             "invalid_auth": "身份验证无效",
             "mobile_account_locked": "涂鸦账号已被临时锁定",
             "mobile_captcha_required": "涂鸦要求进行交互式验证码验证。请手动输入设备凭据。",
@@ -682,6 +685,9 @@
     "options": {
         "error": {
             "device_not_registered": "设备未在涂鸦云端注册",
+            "cloud_permission_denied": "涂鸦云拒绝了该请求：Cloud Development（IoT Core）订阅缺失或已过期。请在涂鸦 IoT 平台续订后重试。",
+            "cloud_no_devices": "关联的涂鸦账号未返回任何设备。请将拥有这些设备的 App 账号关联到 IoT 项目，并检查其数据中心。",
+            "cloud_no_factory_mac": "涂鸦云返回了设备，但没有任何设备提供蓝牙地址，因此无法匹配。",
             "invalid_auth": "身份验证无效",
             "mobile_account_locked": "涂鸦账号已被临时锁定",
             "mobile_captcha_required": "涂鸦要求进行交互式验证码验证。请手动输入设备凭据。",

@@ -63,6 +63,16 @@ TUYA_API_FACTORY_INFO_URL: Final = "/v1.0/iot-03/devices/factory-infos?device_id
 TUYA_API_DEVICE_SPECIFICATION: Final = "/v1.1/devices/%s/specifications"
 TUYA_FACTORY_INFO_MAC: Final = "mac"
 
+# Returned by the Tuya OpenAPI when the IoT project is missing the API
+# permission package (IoT Core) needed to read device credentials. It used to
+# surface as the misleading "Device is not registered in Tuya cloud".
+TUYA_API_PERMISSION_DENIED_CODE: Final = 60009001
+
+# Returned instead when the Cloud Development plan / IoT Core subscription has
+# expired. Every Smart Home API answers with it, so the credential cache stays
+# empty and setup used to fail with the same misleading message.
+TUYA_API_SUBSCRIPTION_EXPIRED_CODE: Final = 28841002
+
 BATTERY_STATE_LOW: Final = "low"
 BATTERY_STATE_NORMAL: Final = "normal"
 BATTERY_STATE_HIGH: Final = "high"

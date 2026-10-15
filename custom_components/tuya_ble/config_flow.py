@@ -78,7 +78,13 @@ from .const import (
     DOMAIN,
 )
 from .devices import get_device_readable_name
-from .cloud import HASSTuyaBLEDeviceManager, TuyaMobileIdentityMismatch
+from .cloud import (
+    CLOUD_ERROR_NO_DEVICES,
+    CLOUD_ERROR_NO_FACTORY_MAC,
+    CLOUD_ERROR_PERMISSION_DENIED,
+    HASSTuyaBLEDeviceManager,
+    TuyaMobileIdentityMismatch,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -121,6 +127,23 @@ def _mobile_error_key(error: TuyaMobileError) -> str:
         if isinstance(error, error_type):
             return key
     return "mobile_credentials_required"
+
+
+# Reasons recorded by the credential cache builder that deserve their own
+# message. Anything else still falls back to `device_not_registered`.
+CLOUD_ERROR_KEYS = {
+    CLOUD_ERROR_PERMISSION_DENIED: "cloud_permission_denied",
+    CLOUD_ERROR_NO_DEVICES: "cloud_no_devices",
+    CLOUD_ERROR_NO_FACTORY_MAC: "cloud_no_factory_mac",
+}
+
+
+def _cloud_lookup_error_key(
+    manager: HASSTuyaBLEDeviceManager | None,
+) -> str:
+    """Report why the device could not be found in the Tuya cloud."""
+    reason = getattr(manager, "last_cloud_error", None)
+    return CLOUD_ERROR_KEYS.get(reason, "device_not_registered")
 
 
 def _has_complete_protocol_v2_pair(
@@ -503,7 +526,7 @@ class TuyaBLEOptionsFlow(OptionsFlowWithConfigEntry):
                         dict(self.config_entry.options)
                     )
                     if credentials is None:
-                        errors["base"] = "device_not_registered"
+                        errors["base"] = _cloud_lookup_error_key(candidate_manager)
                     else:
                         for key in DEVICE_DATA_KEYS:
                             if key not in (CONF_LOCAL_KEY, CONF_SEC_KEY) and key in (
@@ -736,7 +759,7 @@ class TuyaBLEConfigFlow(ConfigFlow, domain=DOMAIN):
             )
             self._data[CONF_ADDRESS] = discovery_info.address
             if credentials is None:
-                errors["base"] = "device_not_registered"
+                errors["base"] = _cloud_lookup_error_key(self._manager)
             elif _has_complete_protocol_v2_pair(credentials):
                 return self.async_create_entry(
                     title=local_name,

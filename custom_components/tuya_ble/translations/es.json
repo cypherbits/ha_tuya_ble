@@ -5,6 +5,9 @@
         },
         "error": {
             "device_not_registered": "El dispositivo no está registrado en la nube de Tuya",
+            "cloud_permission_denied": "La nube de Tuya ha denegado la solicitud: la suscripción a Cloud Development (IoT Core) falta o ha caducado. Renuévela en la plataforma de Tuya IoT y vuelva a intentarlo.",
+            "cloud_no_devices": "La cuenta de Tuya vinculada no ha devuelto ningún dispositivo. Vincule al proyecto de IoT la cuenta de la aplicación propietaria y compruebe su centro de datos.",
+            "cloud_no_factory_mac": "La nube de Tuya ha devuelto los dispositivos, pero ninguno expone una dirección Bluetooth, por lo que no se pueden emparejar.",
             "invalid_auth": "Autenticación inválida",
             "mobile_account_locked": "La cuenta de Tuya está bloqueada temporalmente",
             "mobile_captcha_required": "Tuya requiere un captcha interactivo. Introduzca manualmente las credenciales del dispositivo.",
@@ -682,6 +685,9 @@
     "options": {
         "error": {
             "device_not_registered": "El dispositivo no está registrado en la nube de Tuya",
+            "cloud_permission_denied": "La nube de Tuya ha denegado la solicitud: la suscripción a Cloud Development (IoT Core) falta o ha caducado. Renuévela en la plataforma de Tuya IoT y vuelva a intentarlo.",
+            "cloud_no_devices": "La cuenta de Tuya vinculada no ha devuelto ningún dispositivo. Vincule al proyecto de IoT la cuenta de la aplicación propietaria y compruebe su centro de datos.",
+            "cloud_no_factory_mac": "La nube de Tuya ha devuelto los dispositivos, pero ninguno expone una dirección Bluetooth, por lo que no se pueden emparejar.",
             "invalid_auth": "Autenticación inválida",
             "mobile_account_locked": "La cuenta de Tuya está bloqueada temporalmente",
             "mobile_captcha_required": "Tuya requiere un captcha interactivo. Introduzca manualmente las credenciales del dispositivo.",

@@ -5,6 +5,9 @@
         },
         "error": {
             "device_not_registered": "Gerät ist nicht in der Tuya-Cloud registriert",
+            "cloud_permission_denied": "Die Tuya-Cloud hat die Anfrage abgelehnt: Das Cloud-Development-Abonnement (IoT Core) fehlt oder ist abgelaufen. Verlängern Sie es in der Tuya-IoT-Plattform und versuchen Sie es erneut.",
+            "cloud_no_devices": "Das verknüpfte Tuya-Konto hat keine Geräte zurückgegeben. Verknüpfen Sie das App-Konto, dem die Geräte gehören, mit dem IoT-Projekt und prüfen Sie dessen Rechenzentrum.",
+            "cloud_no_factory_mac": "Die Tuya-Cloud hat die Geräte zurückgegeben, aber keines gibt eine Bluetooth-Adresse an, daher können sie nicht zugeordnet werden.",
             "invalid_auth": "Ungültige Authentifizierung",
             "mobile_account_locked": "Das Tuya-Konto ist vorübergehend gesperrt",
             "mobile_captcha_required": "Tuya verlangt ein interaktives Captcha. Gib die Gerätezugangsdaten manuell ein.",
@@ -682,6 +685,9 @@
     "options": {
         "error": {
             "device_not_registered": "Gerät ist nicht in der Tuya-Cloud registriert",
+            "cloud_permission_denied": "Die Tuya-Cloud hat die Anfrage abgelehnt: Das Cloud-Development-Abonnement (IoT Core) fehlt oder ist abgelaufen. Verlängern Sie es in der Tuya-IoT-Plattform und versuchen Sie es erneut.",
+            "cloud_no_devices": "Das verknüpfte Tuya-Konto hat keine Geräte zurückgegeben. Verknüpfen Sie das App-Konto, dem die Geräte gehören, mit dem IoT-Projekt und prüfen Sie dessen Rechenzentrum.",
+            "cloud_no_factory_mac": "Die Tuya-Cloud hat die Geräte zurückgegeben, aber keines gibt eine Bluetooth-Adresse an, daher können sie nicht zugeordnet werden.",
             "invalid_auth": "Ungültige Authentifizierung",
             "mobile_account_locked": "Das Tuya-Konto ist vorübergehend gesperrt",
             "mobile_captcha_required": "Tuya verlangt ein interaktives Captcha. Gib die Gerätezugangsdaten manuell ein.",

@@ -5,6 +5,9 @@
         },
         "error": {
             "device_not_registered": "Device is not registered in Tuya cloud",
+            "cloud_permission_denied": "Tuya Cloud denied the request: the Cloud Development (IoT Core) subscription is missing or has expired. Renew it in the Tuya IoT Platform and try again.",
+            "cloud_no_devices": "The linked Tuya account returned no devices. Link the app account that owns them to the IoT project and check its data center.",
+            "cloud_no_factory_mac": "Tuya Cloud returned the devices but none exposes a Bluetooth address, so they cannot be matched.",
             "invalid_auth": "Invalid authentication",
             "mobile_account_locked": "The Tuya account is temporarily locked",
             "mobile_captcha_required": "Tuya requires an interactive captcha. Enter the device credentials manually.",
@@ -701,6 +704,9 @@
     "options": {
         "error": {
             "device_not_registered": "Device is not registered in Tuya cloud",
+            "cloud_permission_denied": "Tuya Cloud denied the request: the Cloud Development (IoT Core) subscription is missing or has expired. Renew it in the Tuya IoT Platform and try again.",
+            "cloud_no_devices": "The linked Tuya account returned no devices. Link the app account that owns them to the IoT project and check its data center.",
+            "cloud_no_factory_mac": "Tuya Cloud returned the devices but none exposes a Bluetooth address, so they cannot be matched.",
             "invalid_auth": "Invalid authentication",
             "mobile_account_locked": "The Tuya account is temporarily locked",
             "mobile_captcha_required": "Tuya requires an interactive captcha. Enter the device credentials manually.",

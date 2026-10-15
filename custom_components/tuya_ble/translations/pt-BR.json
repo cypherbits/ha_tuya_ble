@@ -428,6 +428,18 @@
             "residual_electricity": {
                 "name": "Bateria"
             },
+            "cur_current": {
+                "name": "Corrente"
+            },
+            "cur_power": {
+                "name": "Potência"
+            },
+            "cur_voltage": {
+                "name": "Tensão"
+            },
+            "add_ele": {
+                "name": "Energia"
+            },
             "signal_strength": {
                 "name": "Força do sinal"
             },

@@ -14,6 +14,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     PERCENTAGE,
     SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+    UnitOfEnergy,
+    UnitOfPower,
     UnitOfRatio,
     UnitOfTemperature,
     UnitOfTime,
@@ -37,11 +39,19 @@ from .const import (
     CO2_LEVEL_ALARM,
     CO2_LEVEL_NORMAL,
     DOMAIN,
+    DPCode,
     PARKSIDE_MOWER_ERRORS,
     PARKSIDE_MOWER_STATUSES,
     PARKSIDE_MOWER_WARNINGS,
 )
-from .devices import TuyaBLEData, TuyaBLEEntity, TuyaBLEProductInfo
+from .devices import (
+    SMART_PLUG_ENERGY_CODES,
+    TuyaBLEData,
+    TuyaBLEEntity,
+    TuyaBLEProductInfo,
+    find_device_function,
+    is_energy_plug,
+)
 from .tuya_ble import TuyaBLEDataPointType, TuyaBLEDevice
 
 _LOGGER = logging.getLogger(__name__)
@@ -2521,6 +2531,84 @@ rssi_mapping = TuyaBLESensorMapping(
 )
 
 
+# Home Assistant metadata for the metering data points of a socket. The unit
+# and the scale are taken from the device description whenever it declares
+# them, so the values are reported as the device itself defines them.
+PLUG_ENERGY_SENSOR_DEFAULTS: dict[DPCode, tuple] = {
+    DPCode.CUR_VOLTAGE: (
+        SensorDeviceClass.VOLTAGE,
+        UnitOfElectricPotential.VOLT,
+        SensorStateClass.MEASUREMENT,
+    ),
+    DPCode.CUR_CURRENT: (
+        SensorDeviceClass.CURRENT,
+        UnitOfElectricCurrent.MILLIAMPERE,
+        SensorStateClass.MEASUREMENT,
+    ),
+    DPCode.CUR_POWER: (
+        SensorDeviceClass.POWER,
+        UnitOfPower.WATT,
+        SensorStateClass.MEASUREMENT,
+    ),
+    DPCode.ADD_ELE: (
+        SensorDeviceClass.ENERGY,
+        UnitOfEnergy.KILO_WATT_HOUR,
+        SensorStateClass.TOTAL_INCREASING,
+    ),
+}
+
+
+def _plug_values(function) -> dict:
+    """Return the declared value range of a data point, if any."""
+    return function.values if isinstance(function.values, dict) else {}
+
+
+def _plug_energy_description(code: DPCode, function) -> SensorEntityDescription:
+    """Describe one metering data point of a socket."""
+    device_class, default_unit, state_class = PLUG_ENERGY_SENSOR_DEFAULTS[code]
+    unit = _plug_values(function).get("unit")
+    return SensorEntityDescription(
+        key=str(code),
+        device_class=device_class,
+        native_unit_of_measurement=(
+            unit if isinstance(unit, str) and unit else default_unit
+        ),
+        state_class=state_class,
+    )
+
+
+def _plug_energy_coefficient(function) -> float:
+    """Return the divisor for a metering data point from its declared scale."""
+    scale = _plug_values(function).get("scale")
+    if isinstance(scale, int):
+        return float(10**scale)
+    return 1.0
+
+
+def get_energy_plug_mapping(device: TuyaBLEDevice) -> list[TuyaBLESensorMapping]:
+    """Expose the metering data points of a socket with no static mapping.
+
+    Only the data points the device description actually declares are exposed,
+    so a different product cannot report entities the device does not have.
+    """
+    if not is_energy_plug(device):
+        return []
+    mappings: list[TuyaBLESensorMapping] = []
+    for code in SMART_PLUG_ENERGY_CODES:
+        function = find_device_function(device, (code,))
+        if function is None:
+            continue
+        mappings.append(
+            TuyaBLESensorMapping(
+                dp_id=function.dp_id,
+                dp_type=TuyaBLEDataPointType.DT_VALUE,
+                coefficient=_plug_energy_coefficient(function),
+                description=_plug_energy_description(code, function),
+            )
+        )
+    return mappings
+
+
 def get_mapping_by_device(device: TuyaBLEDevice) -> list[TuyaBLESensorMapping]:
     category = mapping.get(device.category)
     if category is not None and category.products is not None:
@@ -2530,7 +2618,7 @@ def get_mapping_by_device(device: TuyaBLEDevice) -> list[TuyaBLESensorMapping]:
         if category.mapping is not None:
             return category.mapping
 
-    return []
+    return get_energy_plug_mapping(device)
 
 
 class TuyaBLESensor(TuyaBLEEntity, SensorEntity):

@@ -449,6 +449,13 @@ See a device marked Experimental you have? We could use real world testing feedb
       <td>Single/Double click and Long press support via events.</td>
     </tr>
     <tr>
+      <td><strong>Sockets</strong></td>
+      <td><code>cz</code>, <code>pc</code></td>
+      <td>Smart plug with energy metering</td>
+      <td>Any product id</td>
+      <td>Switch plus voltage, current, power and energy sensors, built from the data points the device itself declares in the cloud specification, so no product id has to be listed and only the metering a device really reports is exposed. The switch is only created for a device that declares a socket switch together with at least one metering data point. Experimental.</td>
+    </tr>
+    <tr>
       <td rowspan="3"><strong>Battery</strong></td>
       <td rowspan="3"><code>dcb</code></td>
       <td>Parkside Performance Smart Battery 4Ah</td>

@@ -20,7 +20,14 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import DOMAIN
-from .devices import TuyaBLEData, TuyaBLEEntity, TuyaBLEProductInfo
+from .devices import (
+    SMART_PLUG_SWITCH_CODES,
+    TuyaBLEData,
+    TuyaBLEEntity,
+    TuyaBLEProductInfo,
+    find_device_function,
+    is_energy_plug,
+)
 from .tuya_ble import TuyaBLEDataPointType, TuyaBLEDevice
 
 _LOGGER = logging.getLogger(__name__)
@@ -1033,7 +1040,33 @@ def get_mapping_by_device(device: TuyaBLEDevice) -> list[TuyaBLECategorySwitchMa
         if category.mapping is not None:
             return category.mapping
 
-    return []
+    return get_energy_plug_mapping(device)
+
+
+def get_energy_plug_mapping(device: TuyaBLEDevice) -> list[TuyaBLESwitchMapping]:
+    """Expose the switch of a socket with metering that has no static mapping.
+
+    The data point comes from the device description itself, so a smart plug
+    works whatever product id it is sold under and no wrong data point can be
+    written. The metering sensors are added by the sensor platform from the
+    same description.
+    """
+    if not is_energy_plug(device):
+        return []
+    function = find_device_function(device, SMART_PLUG_SWITCH_CODES)
+    if function is None:
+        return []
+    return [
+        TuyaBLESwitchMapping(
+            dp_id=function.dp_id,
+            dp_type=TuyaBLEDataPointType.DT_BOOL,
+            description=SwitchEntityDescription(
+                key="switch",
+                device_class=SwitchDeviceClass.OUTLET,
+                icon="mdi:power-socket",
+            ),
+        )
+    ]
 
 
 class TuyaBLESwitch(TuyaBLEEntity, SwitchEntity):

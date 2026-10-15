@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Final
 
 import logging
 from homeassistant.const import CONF_ADDRESS, CONF_DEVICE_ID, Platform
@@ -27,6 +27,7 @@ from .tuya_ble import (
     TuyaBLEDataPointType,
     TuyaBLEDevice,
     TuyaBLEDeviceCredentials,
+    TuyaBLEDeviceFunction,
 )
 
 from .cloud import HASSTuyaBLEDeviceManager
@@ -37,6 +38,19 @@ from .const import (
     SET_DISCONNECTED_DELAY,
     DPCode,
     DPType,
+)
+
+
+# Data points that identify a socket with energy metering. The Tuya cloud
+# specification of such a device always carries the switch plus at least one of
+# the metering codes, whichever product id it is sold under, so support can be
+# resolved from the device itself instead of a per-product id table.
+SMART_PLUG_SWITCH_CODES: Final = (DPCode.SWITCH_1, DPCode.SWITCH)
+SMART_PLUG_ENERGY_CODES: Final = (
+    DPCode.CUR_POWER,
+    DPCode.CUR_VOLTAGE,
+    DPCode.CUR_CURRENT,
+    DPCode.ADD_ELE,
 )
 
 from .base import IntegerTypeData, EnumTypeData
@@ -766,6 +780,17 @@ devices_database: dict[str, TuyaBLECategoryInfo] = {
             ),
         },
     ),
+    # Socket and power socket. Every product id is accepted: the switch and the
+    # metering entities are built from the data points the device itself
+    # declares, so no per-product id table is needed.
+    "cz": TuyaBLECategoryInfo(
+        products={},
+        info=TuyaBLEProductInfo(name="Smart plug"),
+    ),
+    "pc": TuyaBLECategoryInfo(
+        products={},
+        info=TuyaBLEProductInfo(name="Smart plug"),
+    ),
     "cl": TuyaBLECategoryInfo(
         products={
             **dict.fromkeys(
@@ -844,6 +869,32 @@ def get_product_info_by_ids(
 
 def get_device_product_info(device: TuyaBLEDevice) -> TuyaBLEProductInfo | None:
     return get_product_info_by_ids(device.category, device.product_id)
+
+
+def find_device_function(
+    device: TuyaBLEDevice, codes: tuple[DPCode, ...]
+) -> TuyaBLEDeviceFunction | None:
+    """Return the device function declared for the first matching data point.
+
+    Until the device is connected, the cloud specification is the only source
+    of its data points. Both `function` (writable) and `status_range`
+    (read-only) hold the same code -> dp_id mapping.
+    """
+    for code in codes:
+        function = device.function.get(code) or device.status_range.get(code)
+        if function is not None:
+            return function
+    return None
+
+
+def is_energy_plug(device: TuyaBLEDevice) -> bool:
+    """Return whether the device describes a socket with energy metering."""
+    if find_device_function(device, SMART_PLUG_SWITCH_CODES) is None:
+        return False
+    return any(
+        find_device_function(device, (code,)) is not None
+        for code in SMART_PLUG_ENERGY_CODES
+    )
 
 
 def get_short_address(address: str) -> str:

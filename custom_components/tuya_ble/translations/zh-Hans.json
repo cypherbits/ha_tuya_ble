@@ -428,6 +428,18 @@
             "residual_electricity": {
                 "name": "电量"
             },
+            "cur_current": {
+                "name": "电流"
+            },
+            "cur_power": {
+                "name": "功率"
+            },
+            "cur_voltage": {
+                "name": "电压"
+            },
+            "add_ele": {
+                "name": "电量"
+            },
             "signal_strength": {
                 "name": "信号强度"
             },
